@@ -16,6 +16,7 @@ from .message_func import *
 from .questionnaire import *
 # from .question_list import *
 from .question_rule import *
+from .scoring import *
 line_bot_api = LineBotApi(settings.LINE_CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(settings.LINE_CHANNEL_SECRET)
 # 取得settings.py中的LINE Bot憑證來進行Messaging API的驗證。
@@ -47,7 +48,7 @@ def callback(request):
         for event in events:   
             if isinstance(event, MessageEvent):  # 如果有訊息事件(文字、圖片、位置、影片、貼圖、聲音、檔案)
                 print('message',event.message)
-                message = []
+                message = [] # message最多只能append 5個
                 if event.message.type=='text':
                     mtext=event.message.text
                     uid=event.source.user_id
@@ -130,11 +131,17 @@ def callback(request):
                                 qtag_new,qname_new=rule(qtag,Qdict,Q_name,ans,hos,qnaire,qname,mtext,event.reply_token)
                                 # print('\nqtag_new: ',qtag_new,'\nqname_new: ',qname_new)
                             elif qtag >= len(Q_name): #問卷結束
+                                ans[hos][qnaire]['score'] = scoring(ans,hos,qnaire,Q_name) # 回傳分數
                                 qtag_new = 0
                                 qname_new='' #題目名稱歸零     
                                 User_Info.objects.filter(uid=uid).update(hos='') #醫院別歸零
                                 User_Info.objects.filter(uid=uid).update(qnaire='') #問卷別歸零                        
-                                User_Info.objects.filter(uid=uid).update(state='read')
+                                User_Info.objects.filter(uid=uid).update(state='read') #結束問卷填寫
+                                score=''
+                                for key, value in ans[hos][qnaire]['score'].items():
+                                    temp = key+': '+value+'\n'
+                                    score += temp                                 
+                                message.append(TextSendMessage(text='計分參數:\n'+score)) #顯示各參數值
                                 message.append(TextSendMessage(text='填寫問卷完畢'))
                                 #回答存入本地
                                 with open("C:/Users/User/Machine_Learning/openaifab/Line_bot/test/foodlinebot/ans.txt","w") as f:
@@ -216,117 +223,63 @@ def callback(request):
     
 def rule(qtag,Qdict,Q_name,ans,hos,qnaire,qname,mtext,reply_token):
     # print('qtag',qtag,'ans:',ans,'mtext:',mtext) 
-    if qtag==(Q_name.index('6A')+1) and ans[hos][qnaire]['6A']=='0' : #當問到6A的下一題時，檢查選哪個選項.進入不同問題     
-        if not('6-1-a' in ans[hos][qnaire]):        
-            q_bot(reply_token,Qdict['6-1-a'])
-            qname = '6-1-a'
-            # qtag = Q_name.index('6-1-a')     
-        elif '6-1-a' in ans[hos][qnaire]:    
-            q_bot(reply_token,Qdict['6-1-b'])
-            qname = '6-1-b'     
-            qtag = Q_name.index('6B')     
-    elif qtag==(Q_name.index('6A')+1) and ans[hos][qnaire]['6A']=='1' :
-        if not('6-2.1-a' in ans[hos][qnaire]):
-            q_bot(reply_token,Qdict['6-2.1-a'])
-            qname = '6-2.1-a' 
-            # qtag = Q_name.index('6-2.1-a')
-        elif '6-2.1-a' in ans[hos][qnaire]:
-            q_bot(reply_token,Qdict['6-2.1-b'])
-            qname = '6-2.1-b'
-            qtag = Q_name.index('6B') 
-    elif qtag==(Q_name.index('6A')+1) and ans[hos][qnaire]['6A']=='2' :
-        if not('6-2.2-a' in ans[hos][qnaire]):
-            q_bot(reply_token,Qdict['6-2.2-a'])
-            qname = '6-2.2-a' 
-            # qtag = Q_name.index('6-2.2-a')
-        elif '6-2.2-a' in ans[hos][qnaire]:
-            q_bot(reply_token,Qdict['6-2.2-b'])
-            qname = '6-2.2-b'
-            qtag = Q_name.index('6B') 
-    elif qtag==(Q_name.index('6A')+1) and ans[hos][qnaire]['6A']=='3' :     
+    if qtag==(Q_name.index('5')+1): #當問到11_2的下一題時，檢查選哪個選項.進入不同問題     
+        if '5' in ans[hos][qnaire] and ans[hos][qnaire]['5'] =='0':
+            q_bot(reply_token,Qdict['10'])
+            qname = '10'
+            qtag = Q_name.index('10')+1
+        else:
+            q_bot(reply_token,Qdict[Q_name[qtag]])
+            qname = Q_name[qtag] #目前題目名稱
+            # print('qtag_old',qtag,'qname_old',qname)
+            qtag = qtag+1 #下一題之指標
+    
+    elif qtag==(Q_name.index('6A')+1) and ans[hos][qnaire]['6A']=='3' : #當問到6A的下一題時，檢查選哪個選項(選沒有困擾跳6B)    
         q_bot(reply_token,Qdict['6B'])        
         qname = '6B'
-        qtag = Q_name.index('6B')  #問完後指標跳到下一題的名稱
-            
-    elif qtag==(Q_name.index('6B')+1) and ans[hos][qnaire]['6B']=='0' : #當問到6B的下一題時，檢查選哪個選項.進入不同問題
-        if not('6-3' in ans[hos][qnaire]):
-            q_bot(reply_token,Qdict['6-3'])
-            qname = '6-3' 
-        elif not('6-3-A' in ans[hos][qnaire]):
-            q_bot(reply_token,Qdict['6-3-A'])
-            qname = '6-3-A'
-        elif not('6-3-B' in ans[hos][qnaire]):    
-            q_bot(reply_token,Qdict['6-3-B'])
-            qname = '6-3-B'
-        elif not('6-3-C' in ans[hos][qnaire]):    
-            q_bot(reply_token,Qdict['6-3-C'])
-            qname = '6-3-C'
-            qtag = Q_name.index('7') 
-    elif qtag==(Q_name.index('6B')+1) and ans[hos][qnaire]['6B']=='1' : 
-        if not('6-4' in ans[hos][qnaire]):
-            q_bot(reply_token,Qdict['6-4'])
-            qname = '6-4' 
-            qtag = Q_name.index('7') 
-    elif qtag==(Q_name.index('6B')+1) and ans[hos][qnaire]['6B']=='2' : 
-        if not('6-5.1' in ans[hos][qnaire]):
-            q_bot(reply_token,Qdict['6-5.1'])
-            qname = '6-5.1' 
-            qtag = Q_name.index('7')
-    elif qtag==(Q_name.index('6B')+1) and ans[hos][qnaire]['6B']=='3' : 
-        if not('6-5.2' in ans[hos][qnaire]):
-            q_bot(reply_token,Qdict['6-5.2'])
-            qname = '6-5.2' 
-        elif not('6-5.2-A' in ans[hos][qnaire]):
-            q_bot(reply_token,Qdict['6-5.2-A'])
-            qname = '6-5.2-A'
-        elif not('6-5.2-B' in ans[hos][qnaire]):    
-            q_bot(reply_token,Qdict['6-5.2-B'])
-            qname = '6-5.2-B'
-        elif not('6-5.2-C' in ans[hos][qnaire]):    
-            q_bot(reply_token,Qdict['6-5.2-C'])
-            qname = '6-5.2-C'
-        elif not('6-5.2-D' in ans[hos][qnaire]):    
-            q_bot(reply_token,Qdict['6-5.2-D'])
-            qname = '6-5.2-D' 
-            qtag = Q_name.index('7') 
-    elif qtag==(Q_name.index('6B')+1) and ans[hos][qnaire]['6B']=='4' : 
-        if not('6-6' in ans[hos][qnaire]):
-            q_bot(reply_token,Qdict['6-6'])
-            qname = '6-6' 
-            qtag = Q_name.index('7') 
-    elif qtag==(Q_name.index('6B')+1) and ans[hos][qnaire]['6B']=='5' : 
-        if not('6-7' in ans[hos][qnaire]):
-            q_bot(reply_token,Qdict['6-7'])
-            qname = '6-7' 
-            qtag = Q_name.index('7') 
-    elif qtag==(Q_name.index('6B')+1) and ans[hos][qnaire]['6B']=='6' : 
-        if not('6-8' in ans[hos][qnaire]):
-            q_bot(reply_token,Qdict['6-8'])
-            qname = '6-8' 
-            qtag = Q_name.index('7') 
-    elif qtag==(Q_name.index('6B')+1) and ans[hos][qnaire]['6B']=='7' : 
-        if not('6-9' in ans[hos][qnaire]):
-            q_bot(reply_token,Qdict['6-9'])
-            qname = '6-9' 
-            qtag = Q_name.index('7') 
-    elif qtag==(Q_name.index('6B')+1) and ans[hos][qnaire]['6B']=='8' : 
+        qtag = Q_name.index('6B')+1  #問完後指標跳到下一題的指標
+        
+    elif qtag==(Q_name.index('6-1-a')+1) and ans[hos][qnaire]['6-1-a']=='0' :                   
+        q_bot(reply_token,Qdict['6-2.1-a'])
+        qname = '6-2.1-a'         
+        qtag = Q_name.index('6-2.1-a')+1 
+    elif qtag==(Q_name.index('6-2.1-a')+1) and ans[hos][qnaire]['6-2.1-a']=='0' :
+        q_bot(reply_token,Qdict['6-2.2-a'])
+        qname = '6-2.2-a' 
+        qtag = Q_name.index('6-2.2-a')+1 
+    elif qtag==(Q_name.index('6-2.2-a')+1) and ans[hos][qnaire]['6-2.2-a']=='0' :
+        q_bot(reply_token,Qdict['6B'])
+        qname = '6B'
+        qtag = Q_name.index('6B')+1 
+    
+    elif qtag==(Q_name.index('6B')+1) and ans[hos][qnaire]['6B']=='8' : #當問到6B的下一題時，檢查選哪個選項(選沒有困擾跳7) 
         q_bot(reply_token,Qdict['7'])
         qname = '7' 
-        qtag = Q_name.index('8') #問完後指標跳到下一題的名稱
-    
-    elif qtag==(Q_name.index('11_2')+1): #當問到11_2的下一題時，檢查選哪個選項.進入不同問題     
+        qtag = Q_name.index('7')+1 #問完後指標跳到下一題的指標
+        
+    elif qtag==(Q_name.index('6-3')+1) and ans[hos][qnaire]['6-3']=='0' :    
+        q_bot(reply_token,Qdict['6-4'])
+        qname = '6-4'
+        qtag = Q_name.index('6-4')+1  
+    elif qtag==(Q_name.index('6-5.2')+1) and ans[hos][qnaire]['6-5.2']=='0' : 
+        q_bot(reply_token,Qdict['6-6'])
+        qname = '6-6' 
+        qtag = Q_name.index('6-6')+1
+           
+    elif qtag==(Q_name.index('11_2')+1): #當問到11_2的下一題時，檢查先前分數     
         if '5' in ans[hos][qnaire]:
             if '6-1-a' in ans[hos][qnaire]:
-                if (ans[hos][qnaire]['5'] =='3' or ans[hos][qnaire]['5'] =='4') and ans[hos][qnaire]['6-1-a'] =='2':        
+                if (ans[hos][qnaire]['5'] =='3' or ans[hos][qnaire]['5'] =='4') and ans[hos][qnaire]['6-1-a'] =='3':        
                     if not('DSM_5_1' in ans[hos][qnaire]):
                         q_bot(reply_token,Qdict['DSM_5_1'])
                         qname = 'DSM_5_1'
                     elif not('DSM_5_2' in ans[hos][qnaire]):  
                         q_bot(reply_token,Qdict['DSM_5_2'])
                         qname = 'DSM_5_2'     
-                        qtag = Q_name.index('12')     
+                        qtag = Q_name.index('12')
+                print('in 6-1-a --------qtag=',qtag)
             elif '6-2.1-a' in ans[hos][qnaire]:
-                if (ans[hos][qnaire]['5'] =='3' or ans[hos][qnaire]['5'] =='4') and ans[hos][qnaire]['6-2.1-a'] =='2':  
+                if (ans[hos][qnaire]['5'] =='3' or ans[hos][qnaire]['5'] =='4') and ans[hos][qnaire]['6-2.1-a'] =='3':  
                     if not('DSM_5_1' in ans[hos][qnaire]):
                         q_bot(reply_token,Qdict['DSM_5_1'])
                         qname = 'DSM_5_1'
@@ -334,8 +287,9 @@ def rule(qtag,Qdict,Q_name,ans,hos,qnaire,qname,mtext,reply_token):
                         q_bot(reply_token,Qdict['DSM_5_2'])
                         qname = 'DSM_5_2'     
                         qtag = Q_name.index('12')
+                print('in 6-2.1-a --------qtag=',qtag)
             elif '6-2.2-a' in ans[hos][qnaire]:
-                if (ans[hos][qnaire]['5'] =='3' or ans[hos][qnaire]['5'] =='4') and ans[hos][qnaire]['6-2.2-a'] =='2':        
+                if (ans[hos][qnaire]['5'] =='3' or ans[hos][qnaire]['5'] =='4') and ans[hos][qnaire]['6-2.2-a'] =='3':        
                     if not('DSM_5_1' in ans[hos][qnaire]):
                         q_bot(reply_token,Qdict['DSM_5_1'])
                         qname = 'DSM_5_1'
@@ -343,6 +297,7 @@ def rule(qtag,Qdict,Q_name,ans,hos,qnaire,qname,mtext,reply_token):
                         q_bot(reply_token,Qdict['DSM_5_2'])
                         qname = 'DSM_5_2'     
                         qtag = Q_name.index('12')
+                print('in 6-2.2-a --------qtag=',qtag)
             else:
                 q_bot(reply_token,Qdict['12'])
                 qname = '12'     

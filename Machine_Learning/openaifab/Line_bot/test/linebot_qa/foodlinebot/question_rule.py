@@ -16,7 +16,7 @@ def q_bot(reply_token,Q):
     message=[]
     for i in range(len(Q)): #開始跑 第qtag題內 問題、選項
         question.append(Q[i]) #Q[0]:問題 ,Q[1]:選項1 ,Q[2]:選項2...                                                          
-    print('\nquestion',question,'\nlen(question):',len(question))
+    # print('\nquestion',question,'\nlen(question):',len(question))
     if len(question)==1:
         message.append(TextSendMessage(text=question[0]))
         line_bot_api.reply_message(reply_token,message)
